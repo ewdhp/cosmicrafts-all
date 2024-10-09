@@ -2287,6 +2287,57 @@ shared actor class Cosmicrafts() = Self {
       };
     };
   };
+   // Create a post by caller
+  public shared({caller}) func createPostByID(
+    id : Principal,
+    images : ?[Nat],
+    content : Text,
+  ) : async Int {
+
+    let user : ?UserBasicInfo = userBasicInfo.get(id);
+    let basicInfo :UserBasicInfo = switch (user) {
+      case null {return -1};
+      case (?info) {info};
+    };
+
+    switch (userNetwork.get(id)) {
+      case (null) return -1;
+      case (?network) {
+        switch (network.posts) {
+          case (null) return -1;
+          case (?posts) {
+            let postCount = posts.size() + 1;
+            let newPost : Post = {
+              id = postCount;
+              userId = caller;
+              username = basicInfo.username;
+              images = switch (images) {
+                case (?images) ?images;
+                case (null) ?[];
+              };
+              content = content;
+              timestamp = Time.now();
+              likes = ?[];
+              comments = ?[];
+            };
+            let updatedPosts = Array.append<Post>(
+              posts,
+              [newPost],
+            );
+            let updatedUserNetwork = {
+              network with
+              posts = ?updatedPosts
+            };
+            userNetwork.put(
+              id,
+              updatedUserNetwork,
+            );
+            return postCount;
+          };
+        };
+      };
+    };
+  };
 
   // Get a post by caller and postId
   public query ({ caller }) func getPost(postId : Nat) : async ?Post {

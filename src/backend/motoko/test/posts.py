@@ -9,7 +9,7 @@ import requests
 
 # Configuration
 USERS_CANISTER = "bkyz2-fmaaa-aaaaa-qaaaq-cai"  # Replace with your actual 'users' canister name if different
-CALLER_ID = "tuvpz-t7mct-pc5f2-hr5jm-qso7h-citic-llcr7-kum43-mscez-w4vjf-3ae"
+CALLER_ID = "3s2fs-u7klb-jmedr-ekalt-oxxmm-u35zu-stqv5-55af6-5osat-gct7a-gqe"
 
 # Function to switch to a given identity
 def switch_identity(identity):
@@ -64,10 +64,10 @@ def add_friend(user_id, friend_id):
     return run_command(command)
 
 # Function to create a post
-def create_post(images, content):
+def create_post(caller_id, images, content):
     command = [
-        "dfx", "canister", "call", "bkyz2-fmaaa-aaaaa-qaaaq-cai", "createPost",
-        f'( null, "{content}")'
+        "dfx", "canister", "call", "bkyz2-fmaaa-aaaaa-qaaaq-cai", "createPostByID",
+        f'( principal "{caller_id}", null, "{content}")'
     ]
     print(f"Debug: Running command: {' '.join(command)}")  # Debug: Print the command being run
     result = subprocess.run(command, capture_output=True, text=True)
@@ -256,6 +256,7 @@ def main():
             
             try:
                 post_id = create_post(
+                    CALLER_ID,
                     None, 
                     "Sample post content"
                     )       
