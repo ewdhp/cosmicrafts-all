@@ -1,4 +1,5 @@
 import Time "mo:base/Time";
+import Principal "mo:base/Principal";
 import TypesICRC7 "/icrc7/types";
 
 module Types {
@@ -86,11 +87,7 @@ module Types {
     friendProfile : ?UserProfile;
   };
 
-  public type FriendRequest = {
-    from : UserID;
-    to : UserID;
-    timestamp : Int;
-  };
+  public type FriendRequest = Principal;
 
   public type MutualFriendship = {
     friend1 : UserID;

@@ -4,9 +4,8 @@ import string
 import time
 import sys
 
-# Configuration
-USERS_CANISTER = "bkyz2-fmaaa-aaaaa-qaaaq-cai"          # Replace with your actual 'users' canister name if different
-REFERRALS_CANISTER = "bkyz2-fmaaa-aaaaa-qaaaq-cai"  # Replace with your actual 'referrals' canister name if different
+USERS_CANISTER = "bkyz2-fmaaa-aaaaa-qaaaq-cai" 
+REFERRALS_CANISTER = "bkyz2-fmaaa-aaaaa-qaaaq-cai"
 
 def run_command(command, capture_output=True, text=True):
     """
@@ -168,7 +167,7 @@ def main():
     identities = create_identities(num_identities)
     if not identities:
         print("No identities were created. Exiting.")
-        sys.exit(1)
+        sys.exit(-1)
 
     # Step 3: Register each user
     registered_users = []
@@ -191,7 +190,7 @@ def main():
             if not registered_users:
                 print("Error: No registered users available to retrieve a referral code.")
                 print("Cannot proceed with registration of subsequent users.")
-                sys.exit(1)
+                sys.exit(-1)
 
             # Retrieve the referral code from the last registered user
             last_registered_user = registered_users[-1]
@@ -236,6 +235,7 @@ def main():
         print(f"Username: {user['username']}, Principal: {user['principal']}, Referral Code: {user['referral_code']}")
 
     print("\nAll users have been processed successfully.")
+    return True
 
 if __name__ == "__main__":
     main()

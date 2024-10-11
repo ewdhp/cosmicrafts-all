@@ -31,3 +31,6 @@ package-lock.json
 /src/backend/express/node_modules
 /src/backend/express/package-lock.json
 .env
+
+#myenv
+/src/backend/motoko/myenv

@@ -92,18 +92,6 @@ export default {
               <li v-for="(post, pIndex) in network.posts[0]" :key="pIndex">{{ post }}</li>
             </ul>
           </div>
-          <div>
-            <h3>Comments</h3>
-            <ul v-if="network.comments">
-              <li v-for="(comment, cIndex) in network.comments" :key="cIndex">{{ comment }}</li>
-            </ul>
-          </div>
-          <div>
-            <h3>Likes</h3>
-            <ul v-if="network.likes">
-              <li v-for="(like, lIndex) in network.likes" :key="lIndex">{{ like }}</li>
-            </ul>
-          </div>
         </li>
       </ul>
     </div>
