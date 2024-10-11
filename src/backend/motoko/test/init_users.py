@@ -6,7 +6,7 @@ import time
 import sys
 import re
 
-# Default identity for the script
+# Root user principal ID
 root_id = "3s2fs-u7klb-jmedr-ekalt-oxxmm-u35zu-stqv5-55af6-5osat-gct7a-gqe"
 
 
@@ -102,7 +102,7 @@ def register_user(user_id, username, avatar_id, referral_code):
     print("No response received from registration call.")
     return False, "No response"
 
-def create_and_register():
+def setup_users():
   print("=== DFX Identity and User Registration Script ===\n")
 
   root_exists = False
@@ -311,6 +311,7 @@ def get_ids():
   return identity_principals
 
 
+
 """ Create posts, comments, and likes """
 
 def create_post(caller_id, images, content, n):  
@@ -323,7 +324,6 @@ def create_post(caller_id, images, content, n):
       command = [
       "dfx", "canister", "call", "cosmicrafts", "createPostByID",
       f'( principal "{caller_id}", {images}, "{content}")']
-
       result = subprocess.run(
       command, capture_output=True, text=True)
       output = result.stdout.strip()
@@ -333,7 +333,7 @@ def create_post(caller_id, images, content, n):
       success = a[0].strip()
       post_id = l.strip()
       text = a[2].strip()
-
+      print(f"\create_post, Success: {result.stdout}")
   except Exception:
       print(f"Error creating post: {error}")
 
@@ -349,13 +349,11 @@ def create_comment(
   
   success, comment_id, text = False, None, None
 
-  for _ in range(n):
-
+  try:
     command = [
     "dfx", "canister", "call", "cosmicrafts", "createComment",
     f'( {post_id}, principal "{post_owner_id}", principal {comment_creator_id}, "{content}")']
-
-    try:
+    for _ in range(n):
       result = subprocess.run(command, 
       stdout=subprocess.PIPE, 
       stderr=subprocess.PIPE, text=True)
@@ -366,8 +364,9 @@ def create_comment(
       success = a[0].strip()
       comment_id = l.strip()
       text = a[2].strip()
-    except Exception:
-      print(f"Error creating comment: {error}")
+      print(f"\create_comment, Success: {result.stdout}")
+  except Exception:
+    print(f"Error creating comment: {error}")
 
   return success, comment_id, text
  
@@ -394,44 +393,41 @@ def like_comment(post_id, post_creator_user_Id, comment_id,comment_liker_id):
     return None
 
 
+
 """ Add and send friend requests """
 
-def send_friend_req(key, request_ids):
-
-  formatted_ids = '; '.join(
-      [f'principal "{principal_id}"' 
-       for principal_id in request_ids])
-
-  command = [
-    "dfx", "canister", "call", "cosmicrafts", "sendFriendRequests",
-    f'(principal "{key}", vec {{ {formatted_ids} }})'
-  ]
-         
-  try:  
-    result = subprocess.run(
-      command, 
-      capture_output=True, 
-      text=True)       
-    if result.returncode != 0:
-      print(f"Error: {result.stderr}")
-      return False
-    else:
-      print(f"send_friend_req, Success: {result.stdout}")
-      return True
-  except Exception as e:
-    print(f"Exception: {e}")
-    return False
-
-def add_friends(user_id, friend_ids):
+def send_friend_req(id, request_ids):
 
   formatted_ids = '; '.join(
     [f'principal "{principal_id}"' 
-      for principal_id in friend_ids])
+      for principal_id in request_ids])
 
   command = [
-    "dfx", "canister", "call", "cosmicrafts", "blockUsers",
-    f'(principal "{user_id}", vec {{ {formatted_ids} }})'
+    "dfx", "canister", "call", "cosmicrafts", "sendFriendRequests",
+    f'(principal "{id}", vec {{ {formatted_ids} }})'
   ]
+
+  try:
+    result = subprocess.run(
+      command, 
+      capture_output=True, 
+      text=True) 
+        
+    if result.returncode != 0:
+      print(f"Error: {result.stderr}")
+      return False
+    else:
+      print(f"\send_friend_req, Success: {result.stdout}")
+      return True
+  except Exception as e:
+    print(f"Exception: {e}")
+    return False   
+
+def accept_friend_req(user_id, friend_id):
+
+  command = [
+    "dfx", "canister", "call", "cosmicrafts", "acceptFriendReqByID",
+      f'(principal "{user_id}", principal "{friend_id}")']
          
   try:  
     result = subprocess.run(
@@ -442,11 +438,12 @@ def add_friends(user_id, friend_ids):
       print(f"Error: {result.stderr}")
       return False
     else:
-      print(f"add_friends, Success: {result.stdout}")
+      print(f"accept_friend_req, Success: {result.stdout}")
       return True
   except Exception as e:
     print(f"Exception: {e}")
     return False 
+
 
 
 """ Block and follow users """
@@ -466,13 +463,12 @@ def block_users(id, ids_to_block):
     result = subprocess.run(
       command, 
       capture_output=True, 
-      text=True) 
-        
+      text=True)        
     if result.returncode != 0:
       print(f"Error: {result.stderr}")
       return False
     else:
-      print(f"\nblock_users, Success: {result.stdout}")
+      print(f"block_users, Success: {result.stdout}")
       return True
   except Exception as e:
     print(f"Exception: {e}")
@@ -505,44 +501,60 @@ def follow_users(key, follow_ids):
     return False
   
 
+
+""" Notifications """
+
+def get_notifications(user_id):
+  command = [
+    "dfx", "canister", "call", "cosmicrafts", "getNotifications",
+    f'(principal "{user_id}")'
+  ]
+  try:
+    result = subprocess.run(
+      command, 
+      capture_output=True, 
+      text=True)
+    if result.returncode != 0:
+      print(f"Error: {result.stderr}")
+      return None
+    else:
+      print(f"get_notifications, Success: {result.stdout}")
+      return result.stdout
+  except Exception as e:
+    print(f"Exception: {e}")
+    return None
+
+
 """ Main function """
 
 def main():
 
   switch_identity("default")
-  create_and_register() 
+
+  setup_users() 
+
   ids = filter_ids(get_ids())
-  print("ids size: ",len(ids))
   for _ , id in ids.items():
-
-    print(f"Loading user id: {id[:8]}...")
-
-    block_users(id, ids.values())
-    add_friends(id, ids.values())
-    follow_users(id, ids.values())
     send_friend_req(id, ids.values())
-
+    follow_users(id, ids.values())
+    block_users(id, ids.values())    
+    if( id != root_id):
+      send_friend_req(id, [root_id])
+      accept_friend_req(root_id, id)
+    print(f"Creating post...")
     success, post_id, text = create_post(
-      id, "null", "Post content", 1)
-
+    id, "null", "Post", 1)
     if not success:
       print(text) 
       return
-
-    print(f"Post created")
-   
-
+    print(f"Creating comment...")
     commenter_id = '"'+list(ids.values())[1]+'"'     
-    success, comment_id, text = create_comment(
-    post_id, id, commenter_id, "Comment content", 1)
-
+    success, _, text = create_comment(
+    post_id, id, commenter_id, 
+    "Comment", 1)
     if not success:
       print(text) 
-      return
+      return   
     
-    print(f"Comment created")
-
-
-
 if __name__ == "__main__":
-    main()
+  main()
