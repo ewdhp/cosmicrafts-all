@@ -416,39 +416,30 @@ def like_comment(post_id, comment_id, liker_id):
 """ Add and send friend requests """
 
 def send_friend_req(id, request_ids):
-
   for friend_id in request_ids:
-
     command = [
       "dfx", "canister", "call", "cosmicrafts", "sendFriendRequests",
       f'(principal "{id}", vec {{principal "{friend_id}"; }})'
     ]
-
     try:
-
       result = subprocess.run(
         command, 
         capture_output=True, 
-        text=True) 
-          
+        text=True)          
       if result.returncode != 0:
         print(f"Error: {result.stderr}")
         return False
       else:
         print(f"send_friend_req, Success: {result.stdout}")
-
     except Exception as e:
       print(f"Exception: {e}")
     return False   
 
 def accept_friend_req(user_id, acceoted_ids):
-
   for id in acceoted_ids:
-
     command = [
       "dfx", "canister", "call", "cosmicrafts", "acceptFriendReqByID",
-        f'(principal "{user_id}", principal "{id}")']
-         
+        f'(principal "{user_id}", principal "{id}")']       
     try:  
       result = subprocess.run(
         command, 
@@ -469,19 +460,15 @@ def accept_friend_req(user_id, acceoted_ids):
 """ Block and follow users """
 
 def block_users(id, ids_to_block, n):
-
   formatted_ids = []
   for _ in range(n):
     selected_id = random.choice(list(ids_to_block))
-    formatted_ids.append(f'principal "{selected_id}"')
-  
+    formatted_ids.append(f'principal "{selected_id}"') 
   formatted_ids = '; '.join(formatted_ids)
-
   command = [
     "dfx", "canister", "call", "cosmicrafts", "blockUsers",
     f'(principal "{id}", vec {{ {formatted_ids} }})'
   ]
-
   try:
     result = subprocess.run(
       command, 
@@ -498,19 +485,15 @@ def block_users(id, ids_to_block, n):
     return False   
 
 def follow_users(key, follow_ids, n):
-
   formatted_ids = []
   for _ in range(n):
     selected_id = random.choice(list(follow_ids))
-    formatted_ids.append(f'principal "{selected_id}"')
-  
+    formatted_ids.append(f'principal "{selected_id}"') 
   formatted_ids = '; '.join(formatted_ids)
-
   command = [
     "dfx", "canister", "call", "cosmicrafts", "followUsers",
     f'(principal "{key}", vec {{ {formatted_ids} }})'
-  ]
-         
+  ]         
   try:  
     result = subprocess.run(
       command, 
@@ -531,32 +514,37 @@ def follow_users(key, follow_ids, n):
 """ Notifications """
 
 def create_notification(from_id, to_id, n):
-    
-  for _ in range(n):  
-    try:       
-        command = [
-          "dfx", "canister", "call", "cosmicrafts", "createNotification",
-          f'record {{'
-          f'id = null; '
-          f'fromId = variant {{ FriendRequest = principal "{from_id}" }};'
-          f'toId = variant {{ FriendRequest = principal "{to_id}" }};'
-          f'timestamp = null; '
-          f'body = "user notification";'
-          f'}}'
-        ]    
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=True
-        )       
-        output = result.stdout.strip()
-        print(f"send_friend_req, Success: {result.stdout}")       
-        return output
-    except subprocess.CalledProcessError as e:
-        print(f"An error occurred: {e}")
-        return None
-    
+    results = []
+    for _ in range(n):
+        try:
+            command = [
+                "dfx", "canister", "call", "cosmicrafts", "createNotification",
+                f'(record {{'
+                f'id = null; '
+                f'from = variant {{ FriendRequest = principal "{from_id}" }};'
+                f'to = variant {{ FriendRequest = principal "{to_id}" }};'
+                f'timestamp = null; '
+                f'body = "user notification";'
+                f'}})'
+            ]
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            output = result.stdout.strip()
+            print(f"create_notification, Success: {output}")
+            results.append(output)
+        except subprocess.CalledProcessError as e:
+            print(f"An error occurred: {e}")
+            print(f"Command output: {e.output}")
+            print(f"Command stderr: {e.stderr}")
+            results.append(None)
+    return results
+
+
+""" Minting deck, chests, missions, stats and nfts"""
 
 def mint_deck(id):
   command = ["dfx", "canister", "call", "cosmicrafts", 
@@ -623,13 +611,12 @@ def main():
     
     print(f"Name: {name}, Principal ID: {principal}")
     post_id = create_post(principal, "null", "Post")
-    create_comment(post_id, principal, ids.values(), "Comment", 1)    
+    create_comment(post_id, principal, ids.values(), "Comment", len(ids.values()) - 1)    
     send_friend_req(principal, ids.values())
     accept_friend_req(principal,ids.values())
-    follow_users(principal, ids.values(), 1)
-    block_users(principal, ids.values(), 1) 
-    mint_deck(principal)
-    create_notification(1)
+    follow_users(principal, ids.values(), len(ids.values()) - 1)
+    block_users(principal, ids.values(),len(ids.values()) - 1)
+    create_notification(principal, principal, len(ids.values()) - 1)
     
   switch_identity("default")
 
