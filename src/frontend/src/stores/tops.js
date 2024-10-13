@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import useCanisterStore from '@/stores/canister.js';
-import md5 from 'md5'; // Assuming you have an md5 library installed
+import md5 from 'md5';
 
 export const useTopPlayersStore = defineStore(
   'topPlayers', {
@@ -10,9 +10,7 @@ export const useTopPlayersStore = defineStore(
     loaded: false,
     topREF: [],
     topELO: [],
-    topNFT: [],
     topACH: [],
-    topLEV: [],
     dataHash: '',
     canister: null,
   }),
@@ -41,26 +39,20 @@ export const useTopPlayersStore = defineStore(
       const topData = await Promise.all([
         this.canister.getTopReferrals(0),
         this.canister.getTopELO(0),
-        this.canister.getTopNFT(0),
         this.canister.getTopAchievements(0),
-        this.canister.getTopLevel(0),
       ]);
       [
         this.topREF, 
         this.topELO, 
-        this.topNFT, 
         this.topACH, 
-        this.topLEV
       ] = topData;
     },
 
     updateDataHash() {
       const data = [
         ...this.topREF,
-        ...this.topELO,
         ...this.topNFT,
         ...this.topACH,
-        ...this.topLEV,
       ];
       const dataString = JSON.stringify(data, 
         (key, value) =>
@@ -75,16 +67,12 @@ export const useTopPlayersStore = defineStore(
       const newTopData = await Promise.all([
         this.canister.getTopReferrals(0),
         this.canister.getTopELO(0),
-        this.canister.getTopNFT(0),
         this.canister.getTopAchievements(0),
-        this.canister.getTopLevel(0),
       ]);
       const newData = [
         ...newTopData[0],
         ...newTopData[1],
         ...newTopData[2],
-        ...newTopData[3],
-        ...newTopData[4],
       ];
       const newDataString = JSON.stringify(
         newData, (key, value) =>
@@ -96,9 +84,7 @@ export const useTopPlayersStore = defineStore(
         [          
           this.topREF, 
           this.topELO, 
-          this.topNFT, 
-          this.topACH, 
-          this.topLEV,
+          this.topACH,
         ] = newTopData;
         this.updateDataHash();
       }

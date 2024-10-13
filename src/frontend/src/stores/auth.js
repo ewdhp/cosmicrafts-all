@@ -6,7 +6,6 @@ import PhantomService from '../services/PhantomService';
 import useCanisterStore from './canister.js';
 import nacl from 'tweetnacl';
 import { AuthClient } from '@dfinity/auth-client';
-import { useRouter } from 'vue-router';
 
 function base64ToUint8Array(base64) {
   const binaryString = atob(base64);
@@ -104,7 +103,6 @@ export const useAuthStore = defineStore('auth', {
             authenticated = true;
             registered = await this.isPlayerRegistered();
 
-            // Navigate to the root path
             router.push('/');
           },
           onError: (error) => {

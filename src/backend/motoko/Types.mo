@@ -115,9 +115,10 @@ module Types {
   };
 
   public type Notification = {
-    id : Nat;
+    id: ?Nat;
     from : NotificationIdentity;
-    timestamp : Time.Time;
+    to: NotificationIdentity;
+    timestamp : ?Time.Time;
     body : Text;
   };
 
@@ -127,9 +128,6 @@ module Types {
   
   public type NotificationIdentity = {
     #FriendRequest : UserID;
-    #WorldOfUnreal : WouID;
-    #Marketing : MarketingID;
-    #Update : UpdateID;
   };
 
  

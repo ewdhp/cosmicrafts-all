@@ -1,3 +1,4 @@
+import json
 from os import error
 import subprocess
 import random
@@ -8,7 +9,7 @@ import re
 
 # Root user principal ID
 root_id = "3s2fs-u7klb-jmedr-ekalt-oxxmm-u35zu-stqv5-55af6-5osat-gct7a-gqe"
-
+dfxIdentities = []
 
 """ Create identities and register users """
 
@@ -102,8 +103,31 @@ def register_user(user_id, username, avatar_id, referral_code):
     print("No response received from registration call.")
     return False, "No response"
 
+def get_referral_code(principal):
+    try:
+        # Call the getReferralCode function using dfx
+        result = subprocess.run(
+            ["dfx", "canister", "call", "your_canister_name", "getReferralCode", f'(principal "{principal}")'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Parse the output
+        output = result.stdout.strip()
+        # Extract the referral code from the output
+        referral_code = json.loads(output)
+        
+        # Check if the referral code is valid
+        if referral_code is None or referral_code == "":
+            return None
+        
+        return referral_code
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred while retrieving the referral code: {e}")
+        return None
+    
 def setup_users():
-  print("=== DFX Identity and User Registration Script ===\n")
 
   root_exists = False
   # Step 1: Get the number of identities to create
@@ -196,14 +220,15 @@ def setup_users():
           print("Cannot proceed with registration of subsequent users.")
           sys.exit(-1)
 
-        # Retrieve the referral code from the last registered user
-        last_registered_user = registered_users[-1]
-        last_principal = last_registered_user["principal"]
-        print(f"Retrieving referral code from the last registered user: {last_registered_user['username']}")
-        referral_code = get_referral_code(last_principal)
+      # Retrieve a random user's referral code
+      if root_exists:
+        random_user = random.choice(registered_users)
+        random_principal = random_user["principal"]
+        print(f"Retrieving referral code from a randomly selected user: {random_user['username']}")
+        referral_code = get_referral_code(random_principal)
         if not referral_code:
-          print("Failed to retrieve referral code from the last registered user. Using empty string.")
-          referral_code = ""
+            print("Failed to retrieve referral code from the randomly selected user. Using empty string.")
+            referral_code = ""
 
       # Register the root user if it does not exist
       if not root_exists:
@@ -212,14 +237,15 @@ def setup_users():
           print(f"Failed to register user 'Player0': {message}")
           print("Halting script due to registration failure.")
           sys.exit(1)
-        registered_users.append({
-          "name": "Player0",
-          "principal": root_id,
-          "username": "Player0",
-          "avatar_id": 4,
-          "referral_code": "first"})
+  
+      registered_users.append({
+        "name": "Player0",
+        "principal": root_id,
+        "username": "Player0",
+        "avatar_id": 4,
+        "referral_code": "first"})
         
-        root_exists = True
+      root_exists = True
 
       # Register the user using the default identity
       success, message = register_user(user["principal"], username, avatar_id, referral_code)
@@ -253,7 +279,7 @@ def setup_users():
     print(f"Username: {user['username']}, Principal: {user['principal']}, Referral Code: {user['referral_code']}")
 
   print("\nAll users have been processed successfully.")
-  return True
+  return identities
 
 def get_principal_ids(identities):
   principal_ids = [f'principal "{identity["principal"]}"' for identity in identities]
@@ -284,7 +310,7 @@ def filter_ids(identities):
 def add_identitie(identities, name, principal):
   identities[name] = principal
 
-def get_ids(): 
+def get_identities(): 
   switch_identity("default")
 
   command = ["dfx", "identity", "list"]   
@@ -300,60 +326,53 @@ def get_ids():
   
   identity_principals = {}
   for identity in identities:
-    switch_identity(identity)  # Switch to the identity
-    principal_id = get_principal_id()  # Get the principal ID for the active identity
+    switch_identity(identity) 
+    principal_id = get_principal_id() 
     if principal_id:
         identity_principals[identity] = principal_id
 
   identity_principals["player0"] = root_id
 
   switch_identity("default")
-  return identity_principals
 
+  return identity_principals
 
 
 """ Create posts, comments, and likes """
 
-def create_post(caller_id, images, content, n):  
+def create_post(caller_id, images, content):  
   
   success, post_id, text = False, None, None
 
   try:
-     
-    for _ in range(n): 
-      command = [
-      "dfx", "canister", "call", "cosmicrafts", "createPostByID",
-      f'( principal "{caller_id}", {images}, "{content}")']
-      result = subprocess.run(
-      command, capture_output=True, text=True)
-      output = result.stdout.strip()
-      error = result.stderr.strip()
-      a = output[1:-1].split(", ") 
-      l, _ = a[1].split(':')
-      success = a[0].strip()
-      post_id = l.strip()
-      text = a[2].strip()
-      print(f"\create_post, Success: {result.stdout}")
+    command = [
+    "dfx", "canister", "call", "cosmicrafts", "createPostByID",
+    f'( principal "{caller_id}", {images}, "{content}")']
+    result = subprocess.run(
+    command, capture_output=True, text=True)
+    output = result.stdout.strip()
+    error = result.stderr.strip()
+    a = output[1:-1].split(", ") 
+    l, _ = a[1].split(':')
+    success = a[0].strip()
+    post_id = l.strip()
+    text = a[2].strip()
+    print(f"create_post, Success: {result.stdout}")
   except Exception:
       print(f"Error creating post: {error}")
 
-  return success, post_id, text     
+  return post_id    
 
-def create_comment(
-  post_id, 
-  post_owner_id, 
-  comment_creator_id, 
-  content, 
-  n
-  ):
+def create_comment(post_id, post_owner_id, friend_ids, content, n):
   
   success, comment_id, text = False, None, None
 
-  try:
-    command = [
-    "dfx", "canister", "call", "cosmicrafts", "createComment",
-    f'( {post_id}, principal "{post_owner_id}", principal {comment_creator_id}, "{content}")']
+  try:  
     for _ in range(n):
+      selected_id = random.choice(list(friend_ids))
+      command = [
+        "dfx", "canister", "call", "cosmicrafts", "createComment",
+        f'( {post_id}, principal "{post_owner_id}", principal "{selected_id}", "{content}")']
       result = subprocess.run(command, 
       stdout=subprocess.PIPE, 
       stderr=subprocess.PIPE, text=True)
@@ -364,15 +383,15 @@ def create_comment(
       success = a[0].strip()
       comment_id = l.strip()
       text = a[2].strip()
-      print(f"\create_comment, Success: {result.stdout}")
+      print(f"create_comment, Success: {result.stdout}")
   except Exception:
     print(f"Error creating comment: {error}")
 
-  return success, comment_id, text
+  return comment_id
  
 def like_post(post_id, caller_id, liker_id):
   command = [
-    "dfx", "canister", "call", "bkyz2-fmaaa-aaaaa-qaaaq-cai", "likePost",
+    "dfx", "canister", "call", "cosmicrafts", "likePost",
     f'({post_id}, principal "{caller_id}", principal "{liker_id}")'
   ]
   result = subprocess.run(command, capture_output=True, text=True)
@@ -380,7 +399,7 @@ def like_post(post_id, caller_id, liker_id):
   error_output = result.stderr.strip()
   return output, error_output
 
-def like_comment(post_id, post_creator_user_Id, comment_id,comment_liker_id):
+def like_comment(post_id, comment_id, liker_id):
   command = [
     "dfx", "canister", "call", "bkyz2-fmaaa-aaaaa-qaaaq-cai", "likeComment",
     f'({post_id}, principal "{post_creator_user_Id}", {comment_id}, principal "{comment_liker_id}")'
@@ -398,61 +417,65 @@ def like_comment(post_id, post_creator_user_Id, comment_id,comment_liker_id):
 
 def send_friend_req(id, request_ids):
 
-  formatted_ids = '; '.join(
-    [f'principal "{principal_id}"' 
-      for principal_id in request_ids])
+  for friend_id in request_ids:
 
-  command = [
-    "dfx", "canister", "call", "cosmicrafts", "sendFriendRequests",
-    f'(principal "{id}", vec {{ {formatted_ids} }})'
-  ]
+    command = [
+      "dfx", "canister", "call", "cosmicrafts", "sendFriendRequests",
+      f'(principal "{id}", vec {{principal "{friend_id}"; }})'
+    ]
 
-  try:
-    result = subprocess.run(
-      command, 
-      capture_output=True, 
-      text=True) 
-        
-    if result.returncode != 0:
-      print(f"Error: {result.stderr}")
-      return False
-    else:
-      print(f"\send_friend_req, Success: {result.stdout}")
-      return True
-  except Exception as e:
-    print(f"Exception: {e}")
+    try:
+
+      result = subprocess.run(
+        command, 
+        capture_output=True, 
+        text=True) 
+          
+      if result.returncode != 0:
+        print(f"Error: {result.stderr}")
+        return False
+      else:
+        print(f"send_friend_req, Success: {result.stdout}")
+
+    except Exception as e:
+      print(f"Exception: {e}")
     return False   
 
-def accept_friend_req(user_id, friend_id):
+def accept_friend_req(user_id, acceoted_ids):
 
-  command = [
-    "dfx", "canister", "call", "cosmicrafts", "acceptFriendReqByID",
-      f'(principal "{user_id}", principal "{friend_id}")']
+  for id in acceoted_ids:
+
+    command = [
+      "dfx", "canister", "call", "cosmicrafts", "acceptFriendReqByID",
+        f'(principal "{user_id}", principal "{id}")']
          
-  try:  
-    result = subprocess.run(
-      command, 
-      capture_output=True, 
-      text=True)       
-    if result.returncode != 0:
-      print(f"Error: {result.stderr}")
-      return False
-    else:
-      print(f"accept_friend_req, Success: {result.stdout}")
-      return True
-  except Exception as e:
-    print(f"Exception: {e}")
-    return False 
+    try:  
+      result = subprocess.run(
+        command, 
+        capture_output=True, 
+        text=True)       
+      if result.returncode != 0:
+        print(f"Error: {result.stderr}")
+        return False
+      else:
+        print(f"accept_friend_req, Success: {result.stdout}")
+        return True
+    except Exception as e:
+      print(f"Exception: {e}")
+      return False 
 
 
 
 """ Block and follow users """
 
-def block_users(id, ids_to_block):
+def block_users(id, ids_to_block, n):
 
-  formatted_ids = '; '.join(
-    [f'principal "{principal_id}"' 
-      for principal_id in ids_to_block])
+  formatted_ids = []
+  for _ in range(n):
+    selected_id = random.choice(list(ids_to_block))
+    formatted_ids.append(f'principal "{selected_id}"')
+  
+  formatted_ids = '; '.join(formatted_ids)
 
   command = [
     "dfx", "canister", "call", "cosmicrafts", "blockUsers",
@@ -474,11 +497,14 @@ def block_users(id, ids_to_block):
     print(f"Exception: {e}")
     return False   
 
-def follow_users(key, follow_ids):
+def follow_users(key, follow_ids, n):
 
-  formatted_ids = '; '.join(
-      [f'principal "{principal_id}"' 
-       for principal_id in follow_ids])
+  formatted_ids = []
+  for _ in range(n):
+    selected_id = random.choice(list(follow_ids))
+    formatted_ids.append(f'principal "{selected_id}"')
+  
+  formatted_ids = '; '.join(formatted_ids)
 
   command = [
     "dfx", "canister", "call", "cosmicrafts", "followUsers",
@@ -504,57 +530,109 @@ def follow_users(key, follow_ids):
 
 """ Notifications """
 
-def get_notifications(user_id):
+def create_notification(from_id, to_id, n):
+    
+  for _ in range(n):  
+    try:       
+        command = [
+          "dfx", "canister", "call", "cosmicrafts", "createNotification",
+          f'record {{'
+          f'id = null; '
+          f'fromId = variant {{ FriendRequest = principal "{from_id}" }};'
+          f'toId = variant {{ FriendRequest = principal "{to_id}" }};'
+          f'timestamp = null; '
+          f'body = "user notification";'
+          f'}}'
+        ]    
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True
+        )       
+        output = result.stdout.strip()
+        print(f"send_friend_req, Success: {result.stdout}")       
+        return output
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred: {e}")
+        return None
+    
+
+def mint_deck(id):
+  command = ["dfx", "canister", "call", "cosmicrafts", 
+  "mintDeck",f'(principal "{id}")']
+  try :
+    result = subprocess.run(command, 
+    stdout=subprocess.PIPE, 
+    stderr=subprocess.PIPE, text=True)
+    output = result.stdout.strip()  
+    if output and "Deck minted" in output:
+      nats = re.findall(r'\d+', output)
+      nats = [int(nat) for nat in nats]
+      print(f"Extracted nats: {nats}")
+    return nats
+  except Exception as e:
+    print(f"Error minting deck: {e}")
+    return 0
+
+def missions():
+  command = ["dfx", "canister", "call", "cosmicrafts", 
+  "createMissionsPeriodically"]
+  try:  
+    subprocess.run(command, 
+    stdout=subprocess.PIPE, 
+    stderr=subprocess.PIPE, text=True)
+    print(f"missions, Success")
+  except Exception as e:
+    print(f"Error creating missions: {e}")
+  
+def call_mint_chest(player_id, rarity):
+  candid_arg = f'(principal "{player_id}", {rarity})'
   command = [
-    "dfx", "canister", "call", "cosmicrafts", "getNotifications",
-    f'(principal "{user_id}")'
+    "dfx", "canister", "call", "cosmicrafts", "mintChest",
+    candid_arg
   ]
   try:
-    result = subprocess.run(
-      command, 
-      capture_output=True, 
-      text=True)
-    if result.returncode != 0:
-      print(f"Error: {result.stderr}")
-      return None
-    else:
-      print(f"get_notifications, Success: {result.stdout}")
-      return result.stdout
-  except Exception as e:
-    print(f"Exception: {e}")
+    result = subprocess.run(command, capture_output=True, text=True, check=True)
+    output = result.stdout.strip()
+    print(f"Raw output: {output}")
+  except subprocess.CalledProcessError as e:
+    print(f"An error occurred: {e}")
+    print(f"Command output: {e.output}")
+    print(f"Command stderr: {e.stderr}")
     return None
 
 
 """ Main function """
 
 def main():
+  print("=== DFX Identity and User Registration Script ===\n")
 
+  identities = setup_users() 
+  identities = get_identities()
+  ids = filter_ids(identities)
+
+  print("Identities",identities)
+
+  missions()
+  mint_deck("3s2fs-u7klb-jmedr-ekalt-oxxmm-u35zu-stqv5-55af6-5osat-gct7a-gqe")
+
+  for name, principal in ids.items():   
+    if name != "player0":
+      switch_identity(name)
+    
+    print(f"Name: {name}, Principal ID: {principal}")
+    post_id = create_post(principal, "null", "Post")
+    create_comment(post_id, principal, ids.values(), "Comment", 1)    
+    send_friend_req(principal, ids.values())
+    accept_friend_req(principal,ids.values())
+    follow_users(principal, ids.values(), 1)
+    block_users(principal, ids.values(), 1) 
+    mint_deck(principal)
+    create_notification(1)
+    
   switch_identity("default")
 
-  setup_users() 
 
-  ids = filter_ids(get_ids())
-  for _ , id in ids.items():
-    send_friend_req(id, ids.values())
-    follow_users(id, ids.values())
-    block_users(id, ids.values())    
-    if( id != root_id):
-      send_friend_req(id, [root_id])
-      accept_friend_req(root_id, id)
-    print(f"Creating post...")
-    success, post_id, text = create_post(
-    id, "null", "Post", 1)
-    if not success:
-      print(text) 
-      return
-    print(f"Creating comment...")
-    commenter_id = '"'+list(ids.values())[1]+'"'     
-    success, _, text = create_comment(
-    post_id, id, commenter_id, 
-    "Comment", 1)
-    if not success:
-      print(text) 
-      return   
-    
 if __name__ == "__main__":
   main()

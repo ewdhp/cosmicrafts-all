@@ -99,38 +99,44 @@ shared actor class Cosmicrafts() = Self {
   //#endregion
 
   //#region |Admin Functions|
-  public shared ({ caller }) func admin(funcToCall : AdminFunction) : async (Bool, Text) {
-    if (caller == ADMIN_PRINCIPAL) {
-      Debug.print("Admin function called by admin.");
-      switch (funcToCall) {
-        case (#CreateMission(name, missionCategory, missionType, rewardType, rewardAmount, total, hours_active)) {
-          let (success, message, id) = await createGeneralMission(name, missionCategory, missionType, rewardType, rewardAmount, total, hours_active);
-          return (success, message # " Mission ID: " # Nat.toText(id));
-        };
-        case (#CreateMissionsPeriodically()) {
-          await createMissionsPeriodically();
-          return (true, "Missions created.");
-        };
-        case (#MintChest(PlayerId, rarity)) {
-          let (success, message) = await mintChest(PlayerId, rarity);
-          return (success, message);
-        };
-        case (#BurnToken(_caller, from, tokenId, now)) {
-          let result = await _burnToken(_caller, from, tokenId, now);
-          switch (result) {
-            case null return (true, "Token burned successfully.");
-            case (?error) return (false, "Failed to burn token: " # Utils.transferErrorToText(error));
-          };
-        };
-        case (#GetCollectionOwner(_)) {
-          return (true, "Collection Owner: " # debug_show (icrc7_CollectionOwner));
-        };
-        case (#GetInitArgs(_)) {
-          return (true, "Init Args: " # debug_show (icrc7_InitArgs));
+
+  public type AdminFunction = {
+    #CreateMission : (Text, MissionCategory, MissionType, RewardType, Nat, Nat, Nat64);
+    #CreateMissionsPeriodically : ();
+    #MintChest : (Principal, Nat);
+    #BurnToken : (?TypesICRC7.Account, TypesICRC7.Account, TypesICRC7.TokenId, Nat64);
+    #GetCollectionOwner : TypesICRC7.Account;
+    #GetInitArgs : TypesICRC7.CollectionInitArgs;
+  };
+
+  public shared func admin(funcToCall : AdminFunction) : async (Bool, Text) {
+    Debug.print("Admin function called by admin.");
+    switch (funcToCall) {
+      case (#CreateMission(name, missionCategory, missionType, rewardType, rewardAmount, total, hours_active)) {
+        let (success, message, id) = await createGeneralMission(name, missionCategory, missionType, rewardType, rewardAmount, total, hours_active);
+        return (success, message # " Mission ID: " # Nat.toText(id));
+      };
+      case (#CreateMissionsPeriodically()) {
+        await createMissionsPeriodically();
+        return (true, "Missions created.");
+      };
+      case (#MintChest(PlayerId, rarity)) {
+        let (success, message) = await mintChest(PlayerId, rarity);
+        return (success, message);
+      };
+      case (#BurnToken(_caller, from, tokenId, now)) {
+        let result = await _burnToken(_caller, from, tokenId, now);
+        switch (result) {
+          case null return (true, "Token burned successfully.");
+          case (?error) return (false, "Failed to burn token: " # Utils.transferErrorToText(error));
         };
       };
-    } else {
-      return (false, "Access denied: Only admin can call this function.");
+      case (#GetCollectionOwner(_)) {
+        return (true, "Collection Owner: " # debug_show (icrc7_CollectionOwner));
+      };
+      case (#GetInitArgs(_)) {
+        return (true, "Init Args: " # debug_show (icrc7_InitArgs));
+      };
     };
   };
   // #endregion
@@ -153,14 +159,7 @@ shared actor class Cosmicrafts() = Self {
 
   public type InitArgs = TypesICRC1.InitArgs;
 
-  public type AdminFunction = {
-    #CreateMission : (Text, MissionCategory, MissionType, RewardType, Nat, Nat, Nat64);
-    #CreateMissionsPeriodically : ();
-    #MintChest : (Principal, Nat);
-    #BurnToken : (?TypesICRC7.Account, TypesICRC7.Account, TypesICRC7.TokenId, Nat64);
-    #GetCollectionOwner : TypesICRC7.Account;
-    #GetInitArgs : TypesICRC7.CollectionInitArgs;
-  };
+
   // #endregion
 
   // #region |Missions|
@@ -1884,7 +1883,8 @@ shared actor class Cosmicrafts() = Self {
 
         // let result = await initAchievements();
         // createMissionsPeriodically
-        // mintDeck
+
+
         // some nfts mintNFT
         // stats
 
@@ -2757,7 +2757,8 @@ shared actor class Cosmicrafts() = Self {
         switch (network.blockedUsers) {
           case (null) return false;
           case (?blockedUsers) {
-            let update = Array.append<UserID>(
+            let update = 
+            Array.append<UserID>(
               blockedUsers,
               idsToBlock,
           );
@@ -2997,34 +2998,77 @@ shared actor class Cosmicrafts() = Self {
     };
   };
 
+  // create a new notification 
+  public func createNotification(
+    nots : Notification
+    ) : async Bool {
+      switch (nots.to) {
+        case (#FriendRequest(id)) {
+          switch (userNetwork.get(id)) {
+            case (null) return false;
+            case (?network) {
+              switch (network.notifications) {
+                case (null) return false;
+                case (?notifications) {
+                  let nCount = notifications.size() + 1;
+                  let updatedNots = 
+                  Array.append<Notification>(
+                    notifications, [{
+                      id = ?nCount;
+                      from = nots.from;
+                      to = nots.to;
+                      body = nots.body;
+                      timestamp = ?Time.now();
+                    }],
+                  );
+                  let updNetwork = {            
+                    network with
+                    notifications = 
+                    ?updatedNots
+                  };
+                  userNetwork.put(
+                  id, updNetwork);
+                true;
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+
+    
+
   // Get all notifications
   public query ({ caller }) func getAllNotifications(page : Nat) 
-    : async ?[Notification] {
-    switch (userNetwork.get(caller)) {
-      case (null) return null;
-      case (?network) {
-        switch (network.notifications) {
-          case (null) return null;
-          case (?notifications) {
-            let startIndex = page * 10;
-            let endIndex = if (
-              (page + 1) * 10 < notifications.size()
-            ) (page + 1) * 10 else notifications.size();
-            if (startIndex >= notifications.size()) {
-              return null;
-            };
-            ?Iter.toArray(
+    : async ?[Notification] 
+    {
+      switch (userNetwork.get(caller)) {
+        case (null) return null;
+        case (?network) {
+          switch (network.notifications) {
+            case (null) return null;
+            case (?notifications) {
+              let startIndex = page * 10;
+              let endIndex = if (
+                (page + 1) * 10 < notifications.size()
+                ) (page + 1) * 10 else notifications.size();
+                if (startIndex >= notifications.size()) {
+                  return null;
+                };
+                ?Iter.toArray(
               Array.slice<Notification>(
-                notifications,
-                startIndex,
-                endIndex,
-              )
+              notifications,
+              startIndex,
+              endIndex)
             );
           };
         };
       };
     };
   };
+
+
   // #endregion
 
   //#region |MatchMaking|
@@ -3884,7 +3928,10 @@ shared actor class Cosmicrafts() = Self {
 
     let tournament = tournaments[tournamentId];
 
-    if (Array.indexOf<Principal>(caller, tournament.participants, func(a : Principal, b : Principal) : Bool { a == b }) != null) {
+    if (Array.indexOf<Principal>(
+      caller, tournament.participants, 
+      func(a : Principal, b : Principal) : Bool { a == b }) != null)
+       {
       return false;
     };
 
@@ -5384,7 +5431,7 @@ shared actor class Cosmicrafts() = Self {
 
     return #Ok(mintArgs.token_id);
   };
-  public shared ({ caller }) func mintDeck() : async (Bool, Text, [TypesICRC7.TokenId]) {
+  public shared func mintDeck(id: Principal) : async (Bool, Text, [TypesICRC7.TokenId]) {
     let units = ICRC7Utils.initDeck(); // Initialize the deck with units
     var uuids = Buffer.Buffer<TypesICRC7.TokenId>(8);
     let initialTokenId = lastMintedId;
@@ -5439,7 +5486,7 @@ shared actor class Cosmicrafts() = Self {
 
       // Create the mint arguments
       let mintArgs : TypesICRC7.MintArgs = {
-        to = { owner = caller; subaccount = null };
+        to = { owner = id; subaccount = null };
         token_id = tokenId;
         metadata = spaceshipMetadata;
       };
@@ -5452,7 +5499,7 @@ shared actor class Cosmicrafts() = Self {
         case (#Ok(token_id)) {
           uuids.add(token_id);
           // Update minted game NFTs and log the transaction
-          await updateMintedGameNFTs(caller, token_id);
+          await updateMintedGameNFTs(id, token_id);
         };
         case (#Err(err)) Debug.print("Minting failed: " # debug_show (err));
       };
@@ -5461,20 +5508,22 @@ shared actor class Cosmicrafts() = Self {
     lastMintedId += 6;
 
     // Check if the caller has already minted a deck
-    if (mintedCallersMap.get(caller) != null) {
+    if (mintedCallersMap.get(id) != null) {
       return (false, "Deck mint failed: Caller has already minted a deck", []);
     };
 
     // Store the minted deck
-    let storeSuccess = await storeDeck(caller, Buffer.toArray(uuids)); // Pass the caller explicitly here
+    let storeSuccess = await storeDeck(id, Buffer.toArray(uuids)); // Pass the caller explicitly here
     if (not storeSuccess) {
       return (false, "Failed to store the minted deck", []);
     };
 
-    mintedCallersMap.put(caller, true);
+    mintedCallersMap.put(id, true);
 
     return (true, "Deck minted and stored successfully", Buffer.toArray(uuids));
   };
+
+
   private func mintUnit(templateId : Nat, owner : Principal) : async TypesICRC7.MintReceipt {
     let _now = Nat64.fromIntWrap(Time.now());
     let acceptedTo : TypesICRC7.Account = {
@@ -6682,11 +6731,8 @@ shared actor class Cosmicrafts() = Self {
 
   stable var _referrals : [(Principal, RNode)] = [];
   var referrals : HashMap.HashMap<Principal, RNode> = HashMap.fromIter(
-    _referrals.vals(),
-    0,
-    Principal.equal,
-    Principal.hash,
-  );
+    _referrals.vals(),0,Principal.equal,Principal.hash);
+  
   stable var _refCodes : [Text] = [];
   var refCodes : Buffer.Buffer<Text> = Buffer.Buffer<Text>(_refCodes.size());
   let cosmicWords = ["PUMP", "WAGMI", "SHILL", "GWEI", "SATOSHI", "MOON", "WHALE", "LAMBO", "HODL", "FOMO"];
@@ -6783,7 +6829,10 @@ shared actor class Cosmicrafts() = Self {
             };
           };
         };
-        return ?{ node with nodes = childNodes };
+        return 
+      ?{ node 
+      with nodes = childNodes 
+      };
       };
       case null {
         return null;
@@ -6896,6 +6945,35 @@ shared actor class Cosmicrafts() = Self {
     return (true, "Referral linked");
   };
 
+  // Get the top position of the referral  
+  public func getTopPosition(id:Principal) : async Nat {
+    let allReferrals : [(Principal, RNode)] = Iter.toArray(referrals.entries());
+    let sortedReferrals : [(Principal, RNode)] = Array.sort(
+      allReferrals,
+      func(a : (Principal, RNode), b : (Principal, RNode)) : {
+        #less;
+        #equal;
+        #greater;
+      } {
+        if (a.1.earnings > b.1.earnings) {
+          #less;
+        } else if (a.1.earnings < b.1.earnings) {
+          #greater;
+        } else {
+          #equal;
+        };
+      },
+    );
+    var position = 0;
+    for ((playerId, _) in Iter.fromArray(sortedReferrals)) {
+      position := position + 1;
+      if (playerId == id) {
+          return position;
+      };
+    };
+    return 0;
+  };
+
   // Util to enerate a short UUID
   private func generateShortUUID() : async Nat {
     let randomBytes = await Random.blob();
@@ -6938,144 +7016,17 @@ shared actor class Cosmicrafts() = Self {
   // #endregion
 
   //#region |Tops|
-  /**
-  public query func dumpAllPlayerMultipliers() : async [(PlayerId, Float)] {
-    let buffer = Buffer.Buffer<(PlayerId, Float)>(multiplierByPlayer.size());
-    for ((playerId, multiplier) in multiplierByPlayer.entries()) {
-      buffer.add((playerId, multiplier));
-    };
-    return Buffer.toArray(buffer);
-  };
-  public query func topPlayersByMultiplier(page : Nat) : async [(PlayerId, Float)] {
-    // Initialize a buffer to collect all player multipliers
-    let buffer = Buffer.Buffer<(PlayerId, Float)>(multiplierByPlayer.size());
-
-    // Collect all players with their multipliers
-    for ((playerId, multiplier) in multiplierByPlayer.entries()) {
-      buffer.add((playerId, multiplier));
-    };
-
-    // Convert buffer to array
-    let allPlayersWithMultipliers = Buffer.toArray(buffer);
-
-    // Sort the players by multiplier in descending order
-    let sortedPlayers = Array.sort(
-      allPlayersWithMultipliers,
-      func(
-        a : (PlayerId, Float),
-        b : (PlayerId, Float),
-      ) : {
-        #less;
-        #equal;
-        #greater;
-      } {
-        if (a.1 > b.1) {
-          #less; // 'a' comes before 'b'
-        } else if (a.1 < b.1) {
-          #greater; // 'b' comes before 'a'
-        } else {
-          #equal; // 'a' and 'b' are equal
-        };
-      },
-    );
-
-    // Define pagination parameters
-    let start = page * 10;
-    let end = if (start + 10 > Array.size(sortedPlayers)) {
-      Array.size(sortedPlayers); // Ensure we don't go out of bounds
-    } else {
-      start + 10;
-    };
-
-    // Slice the sorted array for the current page and convert to array
-    let paginatedPlayers = Iter.toArray(
-      Array.slice(sortedPlayers, start, end)
-    );
-
-    // Return the paginated list
-    return paginatedPlayers;
-  };
-
-  public type ReferralsTop = {
-    playerId : Principal;
-    totalReferrals : Nat;
-    multiplier : Float;
-    username : Text;
-    avatar : Nat;
-    referrer : ?Principal;
-  };
-  public shared func getTopReferrals(page : Nat) : async [ReferralsTop] {
-    let allReferrals : [(PlayerId, ReferralInfo)] = Iter.toArray(referralsByPlayer.entries());
-
-    let sortedReferrals : [(PlayerId, ReferralInfo)] = Array.sort(
-      allReferrals,
-      func(a : (PlayerId, ReferralInfo), b : (PlayerId, ReferralInfo)) : {
-        #less;
-        #equal;
-        #greater;
-      } {
-        let totalA = a.1.directReferrals + a.1.indirectReferrals + a.1.beyondReferrals;
-        let totalB = b.1.directReferrals + b.1.indirectReferrals + b.1.beyondReferrals;
-
-        if (totalA > totalB) {
-          #less;
-        } else if (totalA < totalB) {
-          #greater;
-        } else {
-          #equal;
-        };
-      },
-    );
-
-    let pageSize = 10;
-    let start = page * pageSize;
-    let end = if (start + pageSize > Array.size(sortedReferrals)) {
-      Array.size(sortedReferrals);
-    } else {
-      start + pageSize;
-    };
-
-    let paginatedReferrals : [(PlayerId, ReferralInfo)] = Iter.toArray(
-      Array.slice(sortedReferrals, start, end)
-    );
-
-    var topReferrals : [ReferralsTop] = [];
-    for (entry in paginatedReferrals.vals()) {
-
-      let playerId = entry.0;
-      let referrer = await getReferrer(playerId);
-      let totalReferrals = await getTotalReferrals(playerId);
-      let multiplier = await getMultiplier(playerId);
-      let playerOpt = userBasicInfo.get(playerId);
-
-      let username = switch (playerOpt) {
-        case (?player) { player.username };
-        case (null) { "Unknown" };
-      };
-      let avatar = switch (playerOpt) {
-        case (?player) { player.avatarId };
-        case (null) { 0 };
-      };
-
-      let r : ReferralsTop = {
-        playerId = playerId;
-        totalReferrals = totalReferrals;
-        multiplier = multiplier;
-        username = username;
-        avatar = avatar;
-        referrer = referrer;
-      };
-      topReferrals := Array.append(topReferrals, [r]);
-    };
-    return topReferrals;
-  };
+ 
+  //////////////////////////
+  //  ELOTop
+  //
   public type ELOTop = {
     playerId : Principal;
     elo : Float;
     username : Text;
     avatar : Nat;
   };
-  public query ({ caller }) func getTopELO(page : Nat) : async [ELOTop] {
+  public query ({ caller }) func getTopELO(id: Principal, page : Nat) : async ?([ELOTop], Nat) {
     let buffer = Buffer.Buffer<(PlayerId, Float)>(userBasicInfo.size());
     for ((playerId, player) in userBasicInfo.entries()) {
       buffer.add((playerId, player.elo));
@@ -7133,32 +7084,46 @@ shared actor class Cosmicrafts() = Self {
       };
       topELOPlayers := Array.append(topELOPlayers, [p]);
     };
-    return topELOPlayers;
+
+    var position = 0;
+    for ((playerId, _) in Iter.fromArray(sortedPlayers)) {
+      position := position + 1;
+      if (playerId == id) {
+          return ?(topELOPlayers, position);
+      };
+    };
+
+    return null;
   };
-  public type NFTTop = {
-    playerId : Principal;
+
+  //////////////////////////
+  //  ReferralTop
+  //
+  public type Position = Nat;
+  public type ReferralTop = {
+    id : Principal;
     avatar : Nat;
     username : Text;
-    level : Nat;
-    nftCount : Nat;
+    multiplier : Float;
+    referralCount : Int;
+    earnings : Float;
+    referralCode : Text;
   };
-  public func getTopNFT(page : Nat) : async [NFTTop] {
-    let buffer = Buffer.Buffer<(PlayerId, Nat)>(userBasicInfo.size());
-    for ((playerId, player) in userBasicInfo.entries()) {
-      let nftCount = (await getNFTs(playerId)).size();
-      buffer.add((playerId, nftCount));
+  public func getTopReferrals(id: Principal, page : Nat) : async ?([ReferralTop], Position) {
+
+    let allReferrals : [(Principal, RNode)] = Iter.toArray(referrals.entries());
+     
+    let user = switch (userBasicInfo.get(id)) {
+      case (?player) { player };
+      case (null) { return null };
     };
-    let allPlayersWithNFTs = Buffer.toArray(buffer);
-    let sortedPlayers = Array.sort(
-      allPlayersWithNFTs,
-      func(a : (PlayerId, Nat), b : (PlayerId, Nat)) : {
-        #less;
-        #equal;
-        #greater;
-      } {
-        if (a.1 > b.1) {
+  
+    let sortedReferrals : [(Principal, RNode)] = Array.sort(
+      allReferrals, func(a : (Principal, RNode), b : (Principal, RNode)) : 
+      {#less; #equal;#greater;} {
+        if (a.1.earnings > b.1.earnings) {
           #less;
-        } else if (a.1 < b.1) {
+        } else if (a.1.earnings < b.1.earnings) {
           #greater;
         } else {
           #equal;
@@ -7168,103 +7133,61 @@ shared actor class Cosmicrafts() = Self {
 
     let pageSize = 10;
     let start = page * pageSize;
-    let end = if (start + pageSize > Array.size(sortedPlayers)) {
-      Array.size(sortedPlayers);
+    let end = if (start + pageSize > Array.size(sortedReferrals)) {
+      Array.size(sortedReferrals);
     } else {
       start + pageSize;
     };
 
-    let paginatedPlayers : [(PlayerId, Nat)] = Iter.toArray(
-      Array.slice(sortedPlayers, start, end)
+    let paginatedReferrals : [(Principal, RNode)] = Iter.toArray(
+      Array.slice(sortedReferrals, start, end)
     );
 
-    var topNFTPlayers : [NFTTop] = [];
-    for (entry in paginatedPlayers.vals()) {
-      let playerId = entry.0;
-      let nftCount = entry.1;
-      let playerOpt = userBasicInfo.get(playerId);
-      let username = switch (playerOpt) {
-        case (?player) { player.username };
-        case (null) { "Unknown" };
-      };
-      let avatar = switch (playerOpt) {
-        case (?player) { player.avatarId };
-        case (null) { 0 };
-      };
-      let level = switch (playerOpt) {
-        case (?player) { player.level };
-        case (null) { 0 };
-      };
+   
+    var topReferrals : [ReferralTop] = [];
 
-      let p : NFTTop = {
-        playerId = playerId;
-        avatar = avatar;
-        username = username;
-        level = level;
-        nftCount = nftCount;
+     var countRefs = 0;
+    for ((_, node) in referrals.entries()) {
+      if (node.referrerId == ?id) {
+        countRefs += 1;
       };
-      topNFTPlayers := Array.append(topNFTPlayers, [p]);
     };
-    return topNFTPlayers;
-  };
-  public type LevelTop = {
-    playerId : Principal;
-    level : Nat;
-    username : Text;
-    avatar : Nat;
-  };
-  public query ({ caller }) func getTopLevel(page : Nat) : async [LevelTop] {
-    let buffer = Buffer.Buffer<(PlayerId, Nat)>(userBasicInfo.size());
-    for ((playerId, player) in userBasicInfo.entries()) {
-      buffer.add((playerId, player.level));
-    };
-    let allPlayersWithLevels = Buffer.toArray(buffer);
-    let sortedPlayers = Array.sort(
-      allPlayersWithLevels,
-      func(a : (PlayerId, Nat), b : (PlayerId, Nat)) : {
-        #less;
-        #equal;
-        #greater;
-      } {
-        if (a.1 > b.1) {
-          #less;
-        } else if (a.1 < b.1) {
-          #greater;
-        } else {
-          #equal;
-        };
-      },
-    );
-    let start = page * 10;
-    let end = if (start + 10 > Array.size(sortedPlayers)) {
-      Array.size(sortedPlayers);
-    } else {
-      start + 10;
-    };
-    let paginatedPlayers = Iter.toArray(Array.slice(sortedPlayers, start, end));
-    var topPlayers : [LevelTop] = [];
-    for (entry in paginatedPlayers.vals()) {
+    for (entry in paginatedReferrals.vals()) {
+
       let playerId = entry.0;
-      let level = entry.1;
-      let playerOpt = userBasicInfo.get(caller);
-      let username = switch (playerOpt) {
-        case (?player) { player.username };
-        case (null) { "Unknown" };
-      };
-      let avatar = switch (playerOpt) {
-        case (?player) { player.avatarId };
-        case (null) { 0 };
-      };
-      let p : LevelTop = {
-        playerId = playerId;
-        level = level;
-        username = username;
+      let node = entry.1;
+      let avatar = user.avatarId;
+      let username = node.username;
+      let multiplier = node.multiplier;
+      let referralCount = countRefs;
+      let earnings = node.earnings;
+      let referralCode = node.referralCode;
+
+      let referralTop : ReferralTop = {
+        id = playerId;
         avatar = avatar;
+        username = username;
+        multiplier = multiplier;
+        referralCount = referralCount;
+        earnings = earnings;
+        referralCode = referralCode;
       };
-      topPlayers := Array.append(topPlayers, [p]);
+      topReferrals := Array.append<ReferralTop>(topReferrals, [referralTop]);
     };
-    return topPlayers;
+
+    var position = 0;
+    for ((playerId, _) in Iter.fromArray(sortedReferrals)) {
+      position := position + 1;
+      if (playerId == id) {
+          return ?(topReferrals, position);
+      };
+    };
+    return null;
   };
+
+  //////////////////////////
+  //  AchievementsTop
+  //
   public type AchievementsTop = {
     playerId : Principal;
     totalAchievements : Nat;
@@ -7348,7 +7271,84 @@ shared actor class Cosmicrafts() = Self {
       topAchievementPlayers := Array.append(topAchievementPlayers, [p]);
     };
     return topAchievementPlayers;
-  };*/
+  };
+
+  //////////////////////////
+  //  NFTTop
+  //
+  public type NFTTop = {
+    playerId : Principal;
+    avatar : Nat;
+    username :Text;
+    level : Nat;
+    nftCount : Nat;
+  };
+  public func getTopNFT(page : Nat) : async [NFTTop] {
+    let buffer = Buffer.Buffer<(PlayerId, Nat)>(userBasicInfo.size());
+    for ((playerId, player) in userBasicInfo.entries()) {
+      let nftCount = (await getNFTs(playerId)).size();
+      buffer.add((playerId, nftCount));
+    };
+    let allPlayersWithNFTs = Buffer.toArray(buffer);
+    let sortedPlayers = Array.sort(
+      allPlayersWithNFTs,
+      func(a : (PlayerId, Nat), b : (PlayerId, Nat)) : {
+        #less;
+        #equal;
+        #greater;
+      } {
+        if (a.1 > b.1) {
+          #less;
+        } else if (a.1 < b.1) {
+          #greater;
+        } else {
+          #equal;
+        };
+      },
+    );
+
+    let pageSize = 10;
+    let start = page * pageSize;
+    let end = if (start + pageSize > Array.size(sortedPlayers)) {
+      Array.size(sortedPlayers);
+    } else {
+      start + pageSize;
+    };
+
+    let paginatedPlayers : [(PlayerId, Nat)] = Iter.toArray(
+      Array.slice(sortedPlayers, start, end)
+    );
+
+    var topNFTPlayers : [NFTTop] = [];
+    for (entry in paginatedPlayers.vals()) {
+      let playerId = entry.0;
+      let nftCount = entry.1;
+      let playerOpt = userBasicInfo.get(playerId);
+      let username = switch (playerOpt) {
+        case (?player) { player.username };
+        case (null) { "Unknown" };
+      };
+      let avatar = switch (playerOpt) {
+        case (?player) { player.avatarId };
+        case (null) { 0 };
+      };
+      let level = switch (playerOpt) {
+        case (?player) { player.level };
+        case (null) { 0 };
+      };
+
+      let p : NFTTop = {
+        playerId = playerId;
+        avatar = avatar;
+        username = username;
+        level = level;
+        nftCount = nftCount;
+      };
+      topNFTPlayers := Array.append(topNFTPlayers, [p]);
+    };
+    return topNFTPlayers;
+  };
+
   // #endregion
 
   //#region |Achievements|

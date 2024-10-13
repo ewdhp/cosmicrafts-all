@@ -62,10 +62,16 @@ export const useProfileStore = defineStore(
         cosmicrafts.getUserNetwork()
       ]);
       const newDataString = JSON.stringify(
-        profile, (key, value) =>
-        typeof value === 'bigint' ?
-          value.toString() : value
-      );
+          profile, (key, value) => {
+            if (typeof value === 'bigint') {
+              return value.toString();
+            }
+            if (value && value._isPrincipal) {
+              return value.toText();
+            }
+            return value;
+          }
+        );
       const newHash = md5(newDataString);
       if (newHash !== this.dataHash) {
         [
@@ -79,15 +85,22 @@ export const useProfileStore = defineStore(
       console.log(this.userNetwork);
     },
     saveState() {
-      const stateString = JSON.stringify(
-        this.$state, (key, value) => (
-          typeof value === 'bigint' ?
-            value.toString() : value
-        ));
-      localStorage.setItem(
-        'profileState',
-        stateString
-      );
+    const stateString = JSON.stringify(
+      {
+        userBasicInfo: this.userBasicInfo,
+        userNetwork: this.userNetwork
+      },
+      (key, value) => {
+        if (typeof value === 'bigint') {
+          return value.toString();
+        }
+        if (value && value._isPrincipal) {
+          return principalToString(value)
+        }
+        return value;
+      }
+    );
+    localStorage.setItem('profileState', stateString);
     },
 
     loadState() {
