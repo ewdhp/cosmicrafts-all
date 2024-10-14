@@ -563,7 +563,7 @@ def mint_deck(id):
     print(f"Error minting deck: {e}")
     return 0
 
-def missions():
+def missions_periodically():
   command = ["dfx", "canister", "call", "cosmicrafts", 
   "createMissionsPeriodically"]
   try:  
@@ -590,6 +590,70 @@ def call_mint_chest(player_id, rarity):
     print(f"Command stderr: {e.stderr}")
     return None
 
+def get_nfts(principal):
+    try:
+        result = subprocess.run(
+            ['dfx', 'canister', 'call', 'cosmicrafts', 'getNFTs', 
+             f'(principal "{principal}")'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        output = result.stdout.strip()
+        print(f"get_nfts: {output}")
+
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred: {e}")
+        print(f"Command output: {e.output}")
+        print(f"Command stderr: {e.stderr}")
+        return None
+
+def get_my_stats():
+    try:
+        # Execute the dfx command to call the getMyStats function
+        result = subprocess.run(
+            ['dfx', 'canister', 'call', 'cosmicrafts', 'getMyStats'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        # The output will be a string, which can be either a valid response or null
+        output = result.stdout.strip()
+        
+        if output == "null":
+            print(f"get_my_stats: {output}")
+        
+        # Output can be other types, handle as needed
+        print(f"get_my_stats {output}")
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error calling getMyStats: {e.stderr}")
+        return None
+
+def init_achievements():
+    try:
+        result = subprocess.run(
+            ['dfx', 'canister', 'call', 'cosmicrafts', 'initAchievements'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        output = result.stdout.strip()
+        
+        if output == "true":
+             print(f"init_achievements: {output}")
+        elif output == "false":
+             print(f"init_achievements: {output}")
+        else:
+            print(f"init_achievements: {output}")
+            return None
+
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred: {e}")
+        print(f"Command output: {e.output}")
+        print(f"Command stderr: {e.stderr}")
+        return None
 
 """ Main function """
 
@@ -602,14 +666,19 @@ def main():
 
   print("Identities",identities)
 
-  missions()
+  init_achievements()
+  missions_periodically() 
   mint_deck("3s2fs-u7klb-jmedr-ekalt-oxxmm-u35zu-stqv5-55af6-5osat-gct7a-gqe")
+  get_nfts("3s2fs-u7klb-jmedr-ekalt-oxxmm-u35zu-stqv5-55af6-5osat-gct7a-gqe")
+  get_my_stats()
 
-  for name, principal in ids.items():   
+  for name, principal in ids.items(): 
+
     if name != "player0":
       switch_identity(name)
     
     print(f"Name: {name}, Principal ID: {principal}")
+  
     post_id = create_post(principal, "null", "Post")
     create_comment(post_id, principal, ids.values(), "Comment", len(ids.values()) - 1)    
     send_friend_req(principal, ids.values())
