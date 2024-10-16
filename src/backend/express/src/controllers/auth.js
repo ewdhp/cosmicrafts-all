@@ -12,11 +12,19 @@ authStrategies.forEach(({ name }) => {
   // Define the callback route for each strategy
   AuthController[`${name}Callback`] = (req, res, next) => {
     passport.authenticate(name, (err, user, info) => {
-      if (err) return next(err); 
-      if (!user) return res.redirect('/');
+      if (err) {
+        return res.status(500).json({ success: false, message: 'Authentication failed', error: err });
+      }
+      if (!user) {
+        return res.status(401).json({ success: false, message: 'Authentication failed', error: info });
+      }
       req.logIn(user, (err) => {
-        if (err) return next(err);
-        return res.redirect('/'); 
+        if (err) {
+          return res.status(500).json({ success: false, message: 'Login failed', error: err });
+        }
+        // Assuming you have a method to generate a token or session
+        const token = generateToken(user);
+        return res.status(200).json({ success: true, message: 'Authentication successful', token });
       });
     })(req, res, next);
   };
