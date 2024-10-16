@@ -34,3 +34,11 @@ package-lock.json
 
 #myenv
 /src/backend/motoko/myenv
+
+#c-sharp
+/src/backend/c-sharp/Server/bin
+/src/backend/c-sharp/Server/obj
+/src/backend/c-sharp/Client_1/bin
+/src/backend/c-sharp/Client_1/obj
+/src/backend/c-sharp/Client_2/bin
+/src/backend/c-sharp/Client_2/obj
